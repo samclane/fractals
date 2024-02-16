@@ -92,15 +92,19 @@ fn main() {
                     _ => {}
                 },
                 Event::MouseWheel { y, .. } => {
-                    let zoom_factor = if y > 0 {
-                        1. - ZOOM_SPEED
-                    } else {
-                        1. + ZOOM_SPEED
-                    };
+                    let zoom_factor = if y > 0 { 1.0 + ZOOM_SPEED } else { 1.0 / (1.0 + ZOOM_SPEED) };
+                    
+                    // Normalize mouse coordinates to range [-1, 1]
+                    let norm_mouse_x = (last_mouse_x as f32 - WIDTH as f32 / 2.0) / (WIDTH as f32 / 2.0);
+                    let norm_mouse_y = (last_mouse_y as f32 - HEIGHT as f32 / 2.0) / (HEIGHT as f32 / 2.0);
+                    
+                    // Adjust zoom
                     zoom *= zoom_factor;
-                    center_x = last_mouse_x as f32;
-                    center_y = last_mouse_y as f32;
-                }
+                    
+                    // Calculate new center considering the mouse position and zoom factor
+                    center_x = center_x + norm_mouse_x * WIDTH as f32 * (1.0 - zoom_factor) / zoom;
+                    center_y = center_y + norm_mouse_y * HEIGHT as f32 * (1.0 - zoom_factor) / zoom;
+                },                
                 Event::MouseMotion { x, y, .. } => {
                     last_mouse_x = x;
                     last_mouse_y = y;
