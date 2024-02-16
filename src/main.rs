@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
@@ -13,18 +11,6 @@ const MAX_ITERATIONS_INIT: u16 = 500;
 const MAX_ITERATIONS_STEP: u16 = 100;
 const ZOOM_SPEED: f32 = 0.1;
 
-// Measure the time it takes to execute a function
-fn timeit(f: impl FnOnce()) {
-    let start = Instant::now();
-    f();
-    let elapsed = start.elapsed();
-    println!(
-        "Elapsed: {}.{:03} seconds",
-        elapsed.as_secs(),
-        elapsed.subsec_millis()
-    );
-}
-
 // Draw the Mandelbrot set on the canvas
 fn draw_mandelbrot(
     canvas: &mut Canvas<sdl2::video::Window>,
@@ -35,7 +21,8 @@ fn draw_mandelbrot(
 ) {
     for x in 0..WIDTH {
         for y in 0..HEIGHT {
-            let (c_re, c_im) = canvas_to_complex(x as f32, y as f32, zoom, center_x, center_y);
+            let c_re = -2.0 + ((x as f32 + center_x) / WIDTH as f32) * 3.0 * zoom;
+            let c_im = -1.5 + ((y as f32 + center_y) / HEIGHT as f32) * 3.0 * zoom;
             let mut z_re = 0.0;
             let mut z_im = 0.0;
 
@@ -59,13 +46,6 @@ fn draw_mandelbrot(
     }
 }
 
-// Convert the canvas coordinates to the complex plane
-fn canvas_to_complex(x: f32, y: f32, zoom: f32, center_x: f32, center_y: f32) -> (f32, f32) {
-    let c_re = -2.0 + ((x + center_x) / WIDTH as f32) * 3.0 * zoom;
-    let c_im = -1.5 + ((y + center_y) / HEIGHT as f32) * 3.0 * zoom;
-    (c_re, c_im)
-}
-
 fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -81,8 +61,10 @@ fn main() {
     let mut zoom: f32 = 1.0;
     let mut center_x: f32 = WIDTH as f32 / 2.0;
     let mut center_y: f32 = HEIGHT as f32 / 2.0;
+    let mut last_mouse_x: i32 = 0;
+    let mut last_mouse_y: i32 = 0;
 
-    timeit(|| draw_mandelbrot(&mut canvas, max_iterations, zoom, center_x, center_y));
+    draw_mandelbrot(&mut canvas, max_iterations, zoom, center_x, center_y);
     canvas.present();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -101,6 +83,12 @@ fn main() {
                             max_iterations = MAX_ITERATIONS_STEP;
                         }
                     }
+                    Some(Keycode::R) => {
+                        max_iterations = MAX_ITERATIONS_INIT;
+                        zoom = 1.0;
+                        center_x = WIDTH as f32 / 2.0;
+                        center_y = HEIGHT as f32 / 2.0;
+                    }
                     _ => {}
                 },
                 Event::MouseWheel { y, .. } => {
@@ -110,16 +98,17 @@ fn main() {
                         1. + ZOOM_SPEED
                     };
                     zoom *= zoom_factor;
+                    center_x = last_mouse_x as f32;
+                    center_y = last_mouse_y as f32;
                 }
                 Event::MouseMotion { x, y, .. } => {
-                    center_x = x as f32;
-                    center_y = y as f32;
+                    last_mouse_x = x;
+                    last_mouse_y = y;
                 }
                 _ => {}
             }
         }
 
-        // timeit(|| calculate_mandelbrot(&mut canvas, max_iterations, zoom, offset_x, offset_y));
         draw_mandelbrot(&mut canvas, max_iterations, zoom, center_x, center_y);
         canvas.present();
     }
