@@ -46,6 +46,43 @@ fn draw_mandelbrot(
     }
 }
 
+// Draw the Julia set on the canvas
+fn draw_julia(
+    canvas: &mut Canvas<sdl2::video::Window>,
+    max_iterations: u16,
+    zoom: f32,
+    center_x: f32,
+    center_y: f32,
+) {
+    for x in 0..WIDTH {
+        for y in 0..HEIGHT {
+            let c_re = 0.;
+            let c_im = 0.8;
+            let mut z_re = -2.0 + ((x as f32 + center_x) / WIDTH as f32) * 3.0 * zoom;
+            let mut z_im = -1.5 + ((y as f32 + center_y) / HEIGHT as f32) * 3.0 * zoom;
+            let mut i: u16 = 0;
+            while i < max_iterations && z_re * z_re + z_im * z_im < 4.0 {
+                let temp = z_re * z_re - z_im * z_im + c_re;
+                z_im = 2.0 * z_re * z_im + c_im;
+                z_re = temp;
+                i += 1;
+            }
+
+            let color = if i == max_iterations {
+                Color::RGB(0, 0, 0)
+            } else {
+                Color::RGB(((i as f32 / max_iterations as f32) * 255.0) as u8, 0, 0)
+            };
+
+            canvas.set_draw_color(color);
+            canvas.draw_point(Point::new(x as i32, y as i32)).unwrap();
+        }
+    }
+}
+
+// Define a common function interface for the draw function
+type DrawFunction = fn(&mut Canvas<sdl2::video::Window>, u16, f32, f32, f32);
+
 fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -56,6 +93,7 @@ fn main() {
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
+    let drawable_functions = vec![draw_mandelbrot, draw_julia];
 
     let mut max_iterations: u16 = MAX_ITERATIONS_INIT;
     let mut zoom: f32 = 1.0;
@@ -63,8 +101,10 @@ fn main() {
     let mut center_y: f32 = HEIGHT as f32 / 2.0;
     let mut last_mouse_x: i32 = 0;
     let mut last_mouse_y: i32 = 0;
+    let mut current_function_index: usize = 0;
+    let mut draw_function: DrawFunction = drawable_functions[current_function_index];
 
-    draw_mandelbrot(&mut canvas, max_iterations, zoom, center_x, center_y);
+    draw_function(&mut canvas, max_iterations, zoom, center_x, center_y);
     canvas.present();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -88,6 +128,19 @@ fn main() {
                         zoom = 1.0;
                         center_x = WIDTH as f32 / 2.0;
                         center_y = HEIGHT as f32 / 2.0;
+                    }
+                    Some(Keycode::Left) => {
+                        current_function_index =
+                            (current_function_index + 1) % drawable_functions.len();
+                        dbg!(current_function_index);
+                        draw_function = drawable_functions[current_function_index];
+                    }
+                    Some(Keycode::Right) => {
+                        current_function_index =
+                            (current_function_index + drawable_functions.len() - 1)
+                                % drawable_functions.len();
+                        dbg!(current_function_index);
+                        draw_function = drawable_functions[current_function_index];
                     }
                     _ => {}
                 },
@@ -119,7 +172,7 @@ fn main() {
             }
         }
 
-        draw_mandelbrot(&mut canvas, max_iterations, zoom, center_x, center_y);
+        draw_function(&mut canvas, max_iterations, zoom, center_x, center_y);
         canvas.present();
     }
 }
