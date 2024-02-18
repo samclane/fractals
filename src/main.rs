@@ -3,6 +3,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
 use sdl2::rect::Point;
 use sdl2::render::Canvas;
+use sdl2::video::Window;
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
@@ -11,77 +12,99 @@ const MAX_ITERATIONS_INIT: u16 = 500;
 const MAX_ITERATIONS_STEP: u16 = 100;
 const ZOOM_SPEED: f32 = 0.1;
 
-// Draw the Mandelbrot set on the canvas
-fn draw_mandelbrot(
-    canvas: &mut Canvas<sdl2::video::Window>,
+struct MandelbrotSet {
     max_iterations: u16,
-    zoom: f32,
-    center_x: f32,
-    center_y: f32,
-) {
-    for x in 0..WIDTH {
-        for y in 0..HEIGHT {
-            let c_re = -2.0 + ((x as f32 + center_x) / WIDTH as f32) * 3.0 * zoom;
-            let c_im = -1.5 + ((y as f32 + center_y) / HEIGHT as f32) * 3.0 * zoom;
-            let mut z_re = 0.0;
-            let mut z_im = 0.0;
+}
 
-            let mut i: u16 = 0;
-            while i < max_iterations && z_re * z_re + z_im * z_im < 4.0 {
-                let temp = z_re * z_re - z_im * z_im + c_re;
-                z_im = 2.0 * z_re * z_im + c_im;
-                z_re = temp;
-                i += 1;
-            }
+impl MandelbrotSet {
+    fn new(max_iterations: u16) -> Self {
+        Self { max_iterations }
+    }
 
-            let color = if i == max_iterations {
-                Color::RGB(0, 0, 0)
-            } else {
-                Color::RGB(((i as f32 / max_iterations as f32) * 255.0) as u8, 0, 0)
-            };
+    fn calculate(&self, c_re: f32, c_im: f32) -> u16 {
+        let mut z_re = 0.0;
+        let mut z_im = 0.0;
+        let mut i: u16 = 0;
 
-            canvas.set_draw_color(color);
-            canvas.draw_point(Point::new(x as i32, y as i32)).unwrap();
+        while i < self.max_iterations && z_re * z_re + z_im * z_im < 4.0 {
+            let temp = z_re * z_re - z_im * z_im + c_re;
+            z_im = 2.0 * z_re * z_im + c_im;
+            z_re = temp;
+            i += 1;
         }
+
+        i
     }
 }
 
-// Draw the Julia set on the canvas
-fn draw_julia(
-    canvas: &mut Canvas<sdl2::video::Window>,
-    max_iterations: u16,
+struct CanvasRenderer<'a> {
+    canvas: &'a mut Canvas<Window>,
+    mandelbrot_set: MandelbrotSet,
     zoom: f32,
     center_x: f32,
     center_y: f32,
-) {
-    for x in 0..WIDTH {
-        for y in 0..HEIGHT {
-            let c_re = 0.;
-            let c_im = 0.8;
-            let mut z_re = -2.0 + ((x as f32 + center_x) / WIDTH as f32) * 3.0 * zoom;
-            let mut z_im = -1.5 + ((y as f32 + center_y) / HEIGHT as f32) * 3.0 * zoom;
-            let mut i: u16 = 0;
-            while i < max_iterations && z_re * z_re + z_im * z_im < 4.0 {
-                let temp = z_re * z_re - z_im * z_im + c_re;
-                z_im = 2.0 * z_re * z_im + c_im;
-                z_re = temp;
-                i += 1;
-            }
-
-            let color = if i == max_iterations {
-                Color::RGB(0, 0, 0)
-            } else {
-                Color::RGB(((i as f32 / max_iterations as f32) * 255.0) as u8, 0, 0)
-            };
-
-            canvas.set_draw_color(color);
-            canvas.draw_point(Point::new(x as i32, y as i32)).unwrap();
-        }
-    }
 }
 
-// Define a common function interface for the draw function
-type DrawFunction = fn(&mut Canvas<sdl2::video::Window>, u16, f32, f32, f32);
+impl<'a> CanvasRenderer<'a> {
+    fn new(
+        canvas: &'a mut Canvas<Window>,
+        mandelbrot_set: MandelbrotSet,
+        zoom: f32,
+        center_x: f32,
+        center_y: f32,
+    ) -> Self {
+        Self {
+            canvas,
+            mandelbrot_set,
+            zoom,
+            center_x,
+            center_y,
+        }
+    }
+
+    fn draw(&mut self) {
+        for x in 0..WIDTH {
+            for y in 0..HEIGHT {
+                let c_re = -2.0 + ((x as f32 + self.center_x) / WIDTH as f32) * 3.0 * self.zoom;
+                let c_im = -1.5 + ((y as f32 + self.center_y) / HEIGHT as f32) * 3.0 * self.zoom;
+
+                let i = self.mandelbrot_set.calculate(c_re, c_im);
+
+                let color = if i == self.mandelbrot_set.max_iterations {
+                    Color::RGB(0, 0, 0)
+                } else {
+                    Color::RGB(
+                        ((i as f32 / self.mandelbrot_set.max_iterations as f32) * 255.0) as u8,
+                        0,
+                        0,
+                    )
+                };
+
+                self.canvas.set_draw_color(color);
+                self.canvas
+                    .draw_point(Point::new(x as i32, y as i32))
+                    .unwrap();
+            }
+        }
+        self.canvas.present();
+    }
+
+    pub fn set_max_iterations(&mut self, max_iterations: u16) {
+        if max_iterations < MAX_ITERATIONS_STEP {
+            return;
+        }
+        self.mandelbrot_set.max_iterations = max_iterations;
+    }
+
+    pub fn set_zoom(&mut self, zoom: f32) {
+        self.zoom = zoom;
+    }
+
+    pub fn set_center(&mut self, center_x: f32, center_y: f32) {
+        self.center_x = center_x;
+        self.center_y = center_y;
+    }
+}
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -93,19 +116,17 @@ fn main() {
         .unwrap();
 
     let mut canvas = window.into_canvas().build().unwrap();
-    let drawable_functions = vec![draw_mandelbrot, draw_julia];
+    let mandelbrot_set = MandelbrotSet::new(MAX_ITERATIONS_INIT);
+    let mut canvas_renderer = CanvasRenderer::new(
+        &mut canvas,
+        mandelbrot_set,
+        1.0,
+        WIDTH as f32 / 2.0,
+        HEIGHT as f32 / 2.0,
+    );
 
-    let mut max_iterations: u16 = MAX_ITERATIONS_INIT;
-    let mut zoom: f32 = 1.0;
-    let mut center_x: f32 = WIDTH as f32 / 2.0;
-    let mut center_y: f32 = HEIGHT as f32 / 2.0;
     let mut last_mouse_x: i32 = 0;
     let mut last_mouse_y: i32 = 0;
-    let mut current_function_index: usize = 0;
-    let mut draw_function: DrawFunction = drawable_functions[current_function_index];
-
-    draw_function(&mut canvas, max_iterations, zoom, center_x, center_y);
-    canvas.present();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -115,32 +136,19 @@ fn main() {
                 Event::KeyDown { keycode, .. } => match keycode {
                     Some(Keycode::Escape) => break 'running,
                     Some(Keycode::Up) => {
-                        max_iterations += MAX_ITERATIONS_STEP;
+                        canvas_renderer.set_max_iterations(
+                            canvas_renderer.mandelbrot_set.max_iterations + MAX_ITERATIONS_STEP,
+                        );
                     }
                     Some(Keycode::Down) => {
-                        max_iterations -= MAX_ITERATIONS_STEP;
-                        if max_iterations < MAX_ITERATIONS_STEP {
-                            max_iterations = MAX_ITERATIONS_STEP;
-                        }
+                        canvas_renderer.set_max_iterations(
+                            canvas_renderer.mandelbrot_set.max_iterations - MAX_ITERATIONS_STEP,
+                        );
                     }
                     Some(Keycode::R) => {
-                        max_iterations = MAX_ITERATIONS_INIT;
-                        zoom = 1.0;
-                        center_x = WIDTH as f32 / 2.0;
-                        center_y = HEIGHT as f32 / 2.0;
-                    }
-                    Some(Keycode::Left) => {
-                        current_function_index =
-                            (current_function_index + 1) % drawable_functions.len();
-                        dbg!(current_function_index);
-                        draw_function = drawable_functions[current_function_index];
-                    }
-                    Some(Keycode::Right) => {
-                        current_function_index =
-                            (current_function_index + drawable_functions.len() - 1)
-                                % drawable_functions.len();
-                        dbg!(current_function_index);
-                        draw_function = drawable_functions[current_function_index];
+                        canvas_renderer.set_max_iterations(MAX_ITERATIONS_INIT);
+                        canvas_renderer.set_zoom(1.0);
+                        canvas_renderer.set_center(WIDTH as f32 / 2.0, HEIGHT as f32 / 2.0);
                     }
                     _ => {}
                 },
@@ -158,11 +166,16 @@ fn main() {
                         (last_mouse_y as f32 - HEIGHT as f32 / 2.0) / (HEIGHT as f32 / 2.0);
 
                     // Adjust zoom
-                    zoom *= zoom_factor;
+                    let zoom = canvas_renderer.zoom * zoom_factor;
 
                     // Calculate new center considering the mouse position and zoom factor
-                    center_x = center_x + norm_mouse_x * WIDTH as f32 * (1.0 - zoom_factor) / zoom;
-                    center_y = center_y + norm_mouse_y * HEIGHT as f32 * (1.0 - zoom_factor) / zoom;
+                    canvas_renderer.set_center(
+                        canvas_renderer.center_x
+                            + norm_mouse_x * WIDTH as f32 * (1.0 - zoom_factor) / zoom,
+                        canvas_renderer.center_y
+                            + norm_mouse_y * HEIGHT as f32 * (1.0 - zoom_factor) / zoom,
+                    );
+                    canvas_renderer.set_zoom(zoom);
                 }
                 Event::MouseMotion { x, y, .. } => {
                     last_mouse_x = x;
@@ -172,7 +185,6 @@ fn main() {
             }
         }
 
-        draw_function(&mut canvas, max_iterations, zoom, center_x, center_y);
-        canvas.present();
+        canvas_renderer.draw();
     }
 }
